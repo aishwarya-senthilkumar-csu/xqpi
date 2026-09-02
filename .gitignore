@@ -1,0 +1,32 @@
+# System & user directories
+.nvm/
+.npm/
+.local/
+.ssh/
+.*
+
+# Keep essential config files
+!.gitignore
+!.bashrc
+!.profile
+
+# Dependencies & caches
+node_modules/
+.next/
+__pycache__/
+*.pyc
+venv/
+*.sqlite3
+
+# Backups & Archives
+*.zip
+*.tar.gz
+backup/
+nginx.zip
+xqpi_server.zip
+xqpi_ui.zip
+
+# Plot images & products
+products/*/*.png
+products/*/images/*.png
+PRODUCT_IMAGES/

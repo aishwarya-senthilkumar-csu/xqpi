@@ -1,0 +1,27 @@
+# UI/Dockerfile
+
+# Use the official Node.js image from the Docker Hub
+FROM node:20.15.0
+
+# Set environment variable to production
+#ENV NODE_ENV=production
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies
+COPY package.json /app/
+COPY package-lock.json /app/
+RUN npm install # --only=production
+#RUN npm install -g next
+
+# Copy project
+COPY . /app/
+
+RUN npm run build
+
+# Expose port for development server
+EXPOSE 3000
+
+# Start the development server
+CMD ["node", "server.js"]

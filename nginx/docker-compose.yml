@@ -1,0 +1,4 @@
+environment:
+      - NODE_ENV=production
+      - NEXTAUTH_SECRET=a_super_secure_random_string_here_2026
+      - NEXTAUTH_URL=https://xqpi.engr.colostate.edu
