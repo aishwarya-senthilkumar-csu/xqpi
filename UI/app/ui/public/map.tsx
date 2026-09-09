@@ -123,16 +123,17 @@ export default function Mapcomponent({
 
     const rainfall_units = [products.radarData.qpe_15min, products.radarData.qpe_1hr, products.radarData.pr,
     products.forecast.pr, products.forecast.tp];
-    const imageExtent: any = [-124.005, 36.500, -121.195, 39.505];
+    const imageExtent: any = [-120.35, 33.28, -117.42, 35.01];
 
     let baseLayer: any = new TileLayer({
         source: new OSM()
     });
     baseLayer.set('id', 'baseLayer');
 
+
     proj4.defs(
-        'EPSG:32610',
-        '+proj=utm +zone=10 +datum=WGS84 +units=m +no_defs'
+        'EPSG:32611',
+        '+proj=utm +zone=11 +datum=WGS84 +units=m +no_defs'
     );
     register(proj4);
 
@@ -196,8 +197,8 @@ export default function Mapcomponent({
             target: mapId,
             layers: [baseLayer, layerRef.current],
             view: new View({
-                center: [-13610058.982783515, 4561655.27023881],
-                zoom: 7.5,
+                center: fromLonLat([-118.25, 34.15]), // Centered around FLOW / LA basin
+                zoom: 8.5
             }),
         });
 
@@ -246,8 +247,8 @@ export default function Mapcomponent({
         );
         source.addFeature(feature);
 
-        const isXBand = typeof prod_details?.id === 'string' && prod_details.id.startsWith('xband_');
-        if (isXBand && radarCode && radarConfigs[radarCode]) {
+        const isIndividualRadar = Boolean(radarCode && radarConfigs[radarCode]);
+        if (isIndividualRadar && radarCode) {
             const extentLonLat = computeRadarExtentLonLat(radarConfigs[radarCode]);
             const extent3857 = transformExtent(extentLonLat, 'EPSG:4326', 'EPSG:3857');
             const fitExtent = scaleExtent3857Inward(extent3857, INDIVIDUAL_RADAR_FIT_EXTENT_FACTOR);
@@ -262,6 +263,16 @@ export default function Mapcomponent({
                     });
                 });
             }
+        } else {
+            // Fits the full SoCal composite domain when not on individual radar
+            const compositeExtent3857 = transformExtent(imageExtent, 'EPSG:4326', 'EPSG:3857');
+            const view = mapRef.current.getView();
+            requestAnimationFrame(() => {
+                view.fit(compositeExtent3857, {
+                    padding: [20, 20, 20, 20],
+                    duration: 200,
+                });
+            });
         }
     }, [radarCode, prod_details?.id]);
 

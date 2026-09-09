@@ -12,14 +12,9 @@ const userProductsDescription = {
 }
 
 const radarCoordinates = {
-    // Keeping your original California coordinates active...
-    XSCV: { lat: 37.3989, lon: -121.8334, range: 40000 },
-    XSCW: { lat: 38.5216, lon: -122.8022, range: 40000 },
-    XSCR: { lat: 36.9847, lon: -121.9786, range: 40000 },
-    XEBY: { lat: 37.8156, lon: -122.0620, range: 40000 },
-    KBBX: { lat: 39.4956, lon: -121.6316, range: 100000 },
-    KDAX: { lat: 38.501,  lon: -121.677,  range: 100000 },
-    KMUX: { lat: 37.1553, lon: -121.898,  range: 100000 }
+    FLOW: { lat: 34.2048, lon: -118.1708, range: 40000 },
+    KSOX: { lat: 33.817733, lon: -117.636, range: 40000 },
+    KVTX: { lat: 34.412017, lon: -119.17875, range: 40000 },
 }
 
 const units = {
@@ -95,7 +90,7 @@ const productImageDir = {
             images: '/products/composite_ref/images/',
             details: '/products/composite_ref/details.json',
             colorbar: { dbz: '/images/colormap_ref.png' },
-            info:'Maximum reflectivity in a column. Created by merging observations from 7 radars that are available in the AQPI domain. 3 NEXRADs - KBBX, KDAX, and KMUX and 4 X-Bands - XSCW, XEBY, XSCV, and XSCR. Spatial resolution is 250m by 250m. The final product is available every 2 minutes. Unit is dBZ.'
+            info: 'Maximum reflectivity in a column. Created by merging observations from radars available in the XQPI domain (FLOW, KSOX, KVTX). Spatial resolution is 250m by 250m. The final product is available every 2 minutes. Unit is dBZ.'        
         },
         comp_now: {
             id: 'comp_now',

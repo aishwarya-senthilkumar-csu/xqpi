@@ -151,12 +151,14 @@ export default function PublicSideNav({
                                     </ListItemPrefix>
                                     Composite Reflectivity
                                 </ListItem>
+                                {/*
                                 <ListItem onClick={() => onProductChange('comp_now')}>
                                     <ListItemPrefix>
                                         <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                                     </ListItemPrefix>
                                     Composite Nowcast
                                 </ListItem> 
+                                */}
                                 <ListItem onClick={() => onProductChange('individual_radar')}>
                                     <ListItemPrefix>
                                         <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
@@ -172,6 +174,7 @@ export default function PublicSideNav({
                         <PopoverHandler className="w-full bg-[#1e4d2b4a] text-black p-2">
                             <Button><FontAwesomeIcon icon={faCloudShowersHeavy} size="2x" color="#1e4d2b" /></Button>
                         </PopoverHandler>
+                        {/*
                         <PopoverContent className="w-72">
                             <div className="mb-4 flex items-center gap-4 border-b border-blue-gray-50 p-2 rounded-lg bg-[#eceff180]">
                                 <FontAwesomeIcon icon={faCloudShowersHeavy} size="2x" color="#1e4d2b" />
@@ -202,6 +205,7 @@ export default function PublicSideNav({
                                 </ListItem>
                             </List>
                         </PopoverContent>
+                        */}
                     </Popover>
                 </div> 
             </div>
@@ -255,12 +259,14 @@ export default function PublicSideNav({
                                             </ListItemPrefix>
                                             Composite Reflectivity
                                         </ListItem>
+                                        {/*
                                         <ListItem onClick={() => onProductChange('comp_now')} className={clsx({ '!bg-[#eceff1cc] text-theme_green': prod_details?.id == 'comp_now' })}>
                                             <ListItemPrefix>
                                                 <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                                             </ListItemPrefix>
                                             Composite Nowcast
                                         </ListItem> 
+                                        */}
                                         <ListItem onClick={() => onProductChange('individual_radar')} className={clsx({ '!bg-[#eceff1cc] text-theme_green': prod_details?.id == 'individual_radar' || !prod_details?.id || prod_details?.id == 'tp' })}>
                                             <ListItemPrefix>
                                                 <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
@@ -270,6 +276,7 @@ export default function PublicSideNav({
                                     </List>
                                 </AccordionBody>
                             </Accordion>
+                            {/*
                             <hr className="my-2 border-blue-gray-50" />
                             <Accordion
                                 open={open === 2}
@@ -280,11 +287,12 @@ export default function PublicSideNav({
                                     />
                                 }
                             >
+                                
                                 <ListItem className={clsx("p-0 hover:bg-[#1e4d2b4a]", { 'bg-[#1e4d2b4a] text-theme_green': open === 2 })} selected={open === 2}>
                                     <AccordionHeader onClick={() => handleOpen(2)} className="border-b-0 p-2">
-                                        <ListItemPrefix className="text-black">
+                                        <ListItemPrefix className="text-black"> */}
                                             {/* <ThunderstormIcon fontSize="large" className="h-5 w-5" /> */}
-                                            <FontAwesomeIcon icon={faCloudShowersHeavy} size="xl" color="#1e4d2b" />
+                                            {/* </List><FontAwesomeIcon icon={faCloudShowersHeavy} size="xl" color="#1e4d2b" />
                                         </ListItemPrefix>
                                         <Typography color="black" className="mr-auto font-normal">
                                             Atmospheric Forecast
@@ -314,6 +322,7 @@ export default function PublicSideNav({
                                     </List>
                                 </AccordionBody>
                             </Accordion> 
+                            */}
                             <hr className="my-2 border-blue-gray-50" /> 
                             <div className="flex flex-row justify-start 2xl:justify-center space-x-5">
                                 <Tooltip content="Step First" placement="bottom" className="text-xs">

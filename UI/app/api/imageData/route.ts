@@ -18,7 +18,8 @@ export async function GET(req: Request) {
     }
     filePath = path.join(getChivoXbandPlotsRoot(), ...rel.split('/'));
   } else {
-    filePath = path.join(process.cwd(), 'products', imageFileName);
+    // Read directly from the Trinity root mount like individual radars
+    filePath = path.join(getChivoXbandPlotsRoot(), imageFileName);
   }
 
   try {
