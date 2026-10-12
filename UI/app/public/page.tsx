@@ -12,9 +12,9 @@ import { products } from '../constants';
  * Set to null to use the API default (rolling last 1 hour from current instant, UTC).
  */
 const XBAND_TEST_WINDOW: { start: string; end: string } | null = null;
-// const XBAND_TEST_WINDOW = { 
-//    start: '20260412-154500', 
-//    end: '20260412-155500' 
+// const XBAND_TEST_WINDOW = {
+//    start: '20260412-154500',
+//    end: '20260412-155500'
 //};
 
 type XBandProdDetails = {
@@ -36,6 +36,8 @@ export default function Public() {
     // Placeholder radar names — update folder keys to match actual XQPI radar folder names
     const [leftRadar, setLeftRadar] = useState('FLOW');
     const [leftRadarProduct, setLeftRadarProduct] = useState('Reflectivity');
+    const [middleRadar, setMiddleRadar] = useState('KVTX');
+    const [middleRadarProduct, setMiddleRadarProduct] = useState('Reflectivity');
     const [rightRadar, setRightRadar] = useState('KSOX');
     const [rightRadarProduct, setRightRadarProduct] = useState('Reflectivity');
 
@@ -47,9 +49,9 @@ export default function Public() {
 
     const radarProductToPrefix: Record<string, string> = {
         'Reflectivity': 'Reflectivity',
-        'Differential Reflectivity': 'DifferentialReflectivity', 
+        'Differential Reflectivity': 'DifferentialReflectivity',
         'Velocity': 'Velocity',
-        'PhiDP': 'DifferentialPhase', 
+        'PhiDP': 'DifferentialPhase',
         'RhoHV': 'RhoHV',
     };
 
@@ -70,17 +72,29 @@ export default function Public() {
     };
 
     const [leftImages, setLeftImages] = useState<string[]>([]);
+    const [middleImages, setMiddleImages] = useState<string[]>([]);
     const [rightImages, setRightImages] = useState<string[]>([]);
     const [leftMeta, setLeftMeta] = useState<Array<{ timestamp: string; date: string; day: string; time: string }>>([]);
+    const [middleMeta, setMiddleMeta] = useState<Array<{ timestamp: string; date: string; day: string; time: string }>>([]);
     const [rightMeta, setRightMeta] = useState<Array<{ timestamp: string; date: string; day: string; time: string }>>([]);
 
     const [leftColorbar, setLeftColorbar] = useState('');
+    const [middleColorbar, setMiddleColorbar] = useState('');
     const [rightColorbar, setRightColorbar] = useState('');
     const [leftUnit, setLeftUnit] = useState('');
+    const [middleUnit, setMiddleUnit] = useState('');
     const [rightUnit, setRightUnit] = useState('');
     const [leftProductInfo, setLeftProductInfo] = useState('');
+    const [middleProductInfo, setMiddleProductInfo] = useState('');
     const [rightProductInfo, setRightProductInfo] = useState('');
     const [leftProdDetails, setLeftProdDetails] = useState<XBandProdDetails>({
+        id: '',
+        name: 'Reflectivity',
+        day: '',
+        date: '',
+        time: '',
+    });
+    const [middleProdDetails, setMiddleProdDetails] = useState<XBandProdDetails>({
         id: '',
         name: 'Reflectivity',
         day: '',
@@ -97,10 +111,13 @@ export default function Public() {
 
     const [xbandRefreshTick, setXbandRefreshTick] = useState(0);
     const [leftXbandIndex, setLeftXbandIndex] = useState(0);
+    const [middleXbandIndex, setMiddleXbandIndex] = useState(0);
     const [rightXbandIndex, setRightXbandIndex] = useState(0);
     const leftImagesRef = useRef<string[]>([]);
+    const middleImagesRef = useRef<string[]>([]);
     const rightImagesRef = useRef<string[]>([]);
     leftImagesRef.current = leftImages;
+    middleImagesRef.current = middleImages;
     rightImagesRef.current = rightImages;
 
     const [unit, setUnit] = useState(units.in)
@@ -210,7 +227,7 @@ export default function Public() {
         if (!isIndividualRadarView) return;
         if (intervalId) clearInterval(intervalId);
         setIsPlaying(false);
-    }, [isIndividualRadarView, leftRadar, leftRadarProduct, rightRadar, rightRadarProduct]);
+    }, [isIndividualRadarView, leftRadar, leftRadarProduct, rightRadar, rightRadarProduct, middleRadar, middleRadarProduct]);
 
     // Refresh xband images every 60s
     useEffect(() => {
@@ -256,6 +273,43 @@ export default function Public() {
         return () => controller.abort();
     }, [isIndividualRadarView, leftRadar, leftRadarProduct, xbandRefreshTick]);
 
+    // Fetch middle radar image sequence
+    useEffect(() => {
+        if (!isIndividualRadarView) return;
+        const radarFolder = radarCodeToFolder[middleRadar];
+        const productPrefix = radarProductToPrefix[middleRadarProduct];
+        // Look for this block around Line 132 inside the Right Radar useEffect:
+        //setMiddleColorbar(`/api/imageData?file=2026/04/12/${middleRadar.toUpperCase()}/${productPrefix}/${middleRadar.toUpperCase()}_${productPrefix}_colorbar.png`);
+        setMiddleColorbar(radarProductToColorbar[middleRadarProduct]);
+        setMiddleUnit(radarProductToUnit[middleRadarProduct]);
+        setMiddleProductInfo('Individual radar visualization');
+        setMiddleProdDetails((prev) => ({
+            ...prev,
+            id: `xband_${productPrefix}`,
+            name: middleRadarProduct,
+        }));
+
+        const controller = new AbortController();
+        let url = `/api/xbandRadarImages?radarFolder=${encodeURIComponent(radarFolder)}&productPrefix=${encodeURIComponent(productPrefix)}`;
+        if (XBAND_TEST_WINDOW) {
+            url += `&testStart=${encodeURIComponent(XBAND_TEST_WINDOW.start)}&testEnd=${encodeURIComponent(XBAND_TEST_WINDOW.end)}`;
+        }
+        fetch(url, { signal: controller.signal })
+            .then((r) => r.json())
+            .then((data) => {
+                setMiddleImages(Array.isArray(data.images) ? data.images : []);
+                setMiddleMeta(Array.isArray(data.meta) ? data.meta : []);
+            })
+            .catch((e) => {
+                if (e?.name === 'AbortError') return;
+                console.error('Failed to load middle radar images', e);
+                setMiddleImages([]);
+                setMiddleMeta([]);
+            });
+
+        return () => controller.abort();
+    }, [isIndividualRadarView, middleRadar, middleRadarProduct, xbandRefreshTick]);
+
     // Fetch right radar image sequence
     useEffect(() => {
         if (!isIndividualRadarView) return;
@@ -300,6 +354,11 @@ export default function Public() {
 
     useEffect(() => {
         if (!isIndividualRadarView) return;
+        setMiddleXbandIndex(middleImages.length > 0 ? middleImages.length - 1 : 0);
+    }, [isIndividualRadarView, middleImages, middleRadar, middleRadarProduct, xbandRefreshTick]);
+
+    useEffect(() => {
+        if (!isIndividualRadarView) return;
         setRightXbandIndex(rightImages.length > 0 ? rightImages.length - 1 : 0);
     }, [isIndividualRadarView, rightImages, rightRadar, rightRadarProduct, xbandRefreshTick]);
 
@@ -310,18 +369,38 @@ export default function Public() {
         if (!meta) return;
 
         // Convert raw string date format from "2026-04-12" into a clean "12-APR-2026" display
-        const dateParts = meta.date.split('-'); 
+        const dateParts = meta.date.split('-');
         const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
         const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${months[parseInt(dateParts[1]) - 1]}-${dateParts[0]}` : meta.date;
 
         setLeftProdDetails({
             id: `xband_${leftRadarProduct}`,
-            name: `${leftRadarProduct.toUpperCase()}`, 
+            name: `${leftRadarProduct.toUpperCase()}`,
             day: `${meta.day.toUpperCase()} ${meta.time} Z`, // Combines day element and time clock into the card middle line
             date: formattedDate,                            // Places the clean calendar date string onto the bottom line
-            time: '' 
+            time: ''
         });
     }, [isIndividualRadarView, leftXbandIndex, leftMeta, leftRadarProduct, leftImages]);
+
+    // Sync middle panel metadata with current active frame
+    useEffect(() => {
+        if (!isIndividualRadarView) return;
+        const meta = middleMeta[middleXbandIndex];
+        if (!meta) return;
+
+        // Convert raw string date format from "2026-04-12" into a clean "12-APR-2026" display
+        const dateParts = meta.date.split('-');
+        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${months[parseInt(dateParts[1]) - 1]}-${dateParts[0]}` : meta.date;
+
+        setMiddleProdDetails({
+            id: `xband_${middleRadarProduct}`,
+            name: `${middleRadarProduct.toUpperCase()}`,
+            day: `${meta.day.toUpperCase()} ${meta.time} Z`, // Combines day element and time clock into the card middle line
+            date: formattedDate,                            // Places the clean calendar date string onto the bottom line
+            time: ''
+        });
+    }, [isIndividualRadarView, middleXbandIndex, middleMeta, middleRadarProduct, middleImages]);
 
     // Sync right panel metadata with current active frame
     useEffect(() => {
@@ -341,7 +420,7 @@ export default function Public() {
             date: formattedDate,                            // Places the clean calendar date string onto the bottom line
             time: ''
         });
-    }, [isIndividualRadarView, leftXbandIndex, leftMeta, leftRadarProduct, leftImages]);
+    }, [isIndividualRadarView, rightXbandIndex, rightMeta, rightRadarProduct, rightImages]);
 
     // // Sync chip metadata with current frame
     // useEffect(() => {
@@ -426,6 +505,7 @@ export default function Public() {
     const handleStepBackward = () => {
         if (isIndividualRadarView) {
             setLeftXbandIndex(0);
+            setMiddleXbandIndex(0);
             setRightXbandIndex(0);
             return;
         }
@@ -441,6 +521,7 @@ export default function Public() {
     const handleStepForward = () => {
         if (isIndividualRadarView) {
             if (leftImages.length > 0) setLeftXbandIndex(leftImages.length - 1);
+            if (middleImages.length > 0) setMiddleXbandIndex(middleImages.length - 1);
             if (rightImages.length > 0) setRightXbandIndex(rightImages.length - 1);
             return;
         }
@@ -459,10 +540,15 @@ export default function Public() {
             setIsPlaying(false);
         } else {
             if (isIndividualRadarView) {
-                if (leftImagesRef.current.length === 0 && rightImagesRef.current.length === 0) return;
+                if (leftImagesRef.current.length === 0 && middleImagesRef.current.length === 0 && rightImagesRef.current.length === 0) return;
                 const id = setInterval(() => {
                     setLeftXbandIndex((prev) => {
                         const L = leftImagesRef.current.length;
+                        if (L <= 0) return 0;
+                        return prev < L - 1 ? prev + 1 : 0;
+                    });
+                    setMiddleXbandIndex((prev) => {
+                        const L = middleImagesRef.current.length;
                         if (L <= 0) return 0;
                         return prev < L - 1 ? prev + 1 : 0;
                     });
@@ -488,6 +574,7 @@ export default function Public() {
     const handleBackward = () => {
         if (isIndividualRadarView) {
             setLeftXbandIndex((prev) => (prev > 0 ? prev - 1 : 0));
+            setMiddleXbandIndex((prev) => (prev > 0 ? prev - 1 : 0));
             setRightXbandIndex((prev) => (prev > 0 ? prev - 1 : 0));
             return;
         }
@@ -504,6 +591,11 @@ export default function Public() {
         if (isIndividualRadarView) {
             setLeftXbandIndex((prev) => {
                 const L = leftImages.length;
+                if (L <= 0) return 0;
+                return prev < L - 1 ? prev + 1 : L - 1;
+            });
+            setMiddleXbandIndex((prev) => {
+                const L = middleImages.length;
                 if (L <= 0) return 0;
                 return prev < L - 1 ? prev + 1 : L - 1;
             });
@@ -554,7 +646,7 @@ export default function Public() {
     }, [intervalId]);
 
     return (
-        <div className="flex flex-col md:flex-row md:overflow-hidden lg:overflow-hidden">
+        <div className="w-screen flex-none w-screen flex-none flex flex-col md:flex-row md:overflow-hidden lg:overflow-hidden">
             <div className="w-full md:w-64 2xl:w-[20rem] flex-none">
                 <PublicSideNav
                     onStepBackward={handleStepBackward}
@@ -568,12 +660,12 @@ export default function Public() {
                     prod_details={prod_details}
                 />
             </div>
-            <div className="h-screen flex grow w-screen">
+            <div className="h-screen flex flex-1 w-full min-w-0">
                 <main className='w-full h-screen'>
                     {isIndividualRadarView ? (
                         <div className="flex w-full h-full">
                             {/* Left radar panel */}
-                            <div className="relative w-1/2 h-full">
+                            <div className="relative w-1/3 min-w-0 h-full">
                                 <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
                                     <div className="grid grid-cols-1 gap-2">
                                         <div>
@@ -617,8 +709,53 @@ export default function Public() {
                                     productInfo={leftProductInfo}
                                 />
                             </div>
+                            {/* Middle radar panel */}
+                            <div className="relative w-1/3 min-w-0 h-full">
+                                <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <div>
+                                            <span className="block font-semibold text-gray-800 mb-1">Middle Radar</span>
+                                            <select
+                                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-theme_green focus:border-theme_green bg-white"
+                                                value={middleRadar}
+                                                onChange={(e) => setMiddleRadar(e.target.value)}
+                                            >
+                                                <option value="FLOW">FLOW</option>
+                                                <option value="KSOX">KSOX</option>
+                                                <option value="KVTX">KVTX</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <span className="block font-semibold text-gray-800 mb-1">Middle Product</span>
+                                            <select
+                                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-theme_green focus:border-theme_green bg-white"
+                                                value={middleRadarProduct}
+                                                onChange={(e) => setMiddleRadarProduct(e.target.value)}
+                                            >
+                                                <option value="Reflectivity">Reflectivity</option>
+                                                <option value="Differential Reflectivity">Differential Reflectivity</option>
+                                                <option value="Velocity">Velocity</option>
+                                                <option value="PhiDP">PhiDP</option>
+                                                {/*<option value="RhoHV">RhoHV</option>*/}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <Map
+                                    mapId="map-middle"
+                                    radarCode={middleRadar}
+                                    onUnitChange={handleUnitChange}
+                                    images={middleImages}
+                                    currentIndex={middleXbandIndex}
+                                    prod_details={middleProdDetails}
+                                    opacity={opacity}
+                                    colorbar={middleColorbar}
+                                    unit={middleUnit}
+                                    productInfo={middleProductInfo}
+                                />
+                            </div>
                             {/* Right radar panel */}
-                            <div className="relative w-1/2 h-full">
+                            <div className="relative w-1/3 min-w-0 h-full">
                                 <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
                                     <div className="grid grid-cols-1 gap-2">
                                         <div>

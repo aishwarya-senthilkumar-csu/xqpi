@@ -2,14 +2,21 @@
 const nextConfig = {
     output: 'standalone',
     env: {
-        // Double backslashes are required here to escape the path in JavaScript
         XBAND_CHIVO_PLOTS_ROOT: "Z:\\xqpi\\PRODUCT_IMAGES",
     },
     typescript: {
-	ignoreBuildErrors: true,
+        ignoreBuildErrors: true,
     },
     eslint: {
-	ignoreDuringBuilds: true,
+        ignoreDuringBuilds: true,
+    },
+    async rewrites() {
+        return [
+            {
+                source: '/products/:path*',
+                destination: '/api/xbandRadarImages?file=:path*',
+            },
+        ];
     },
 };
 
