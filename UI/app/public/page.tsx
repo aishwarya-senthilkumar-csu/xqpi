@@ -110,6 +110,11 @@ export default function Public() {
     });
 
     const [xbandRefreshTick, setXbandRefreshTick] = useState(0);
+    const [flowDate, setFlowDate] = useState('');
+    const [flowLoading, setFlowLoading] = useState(false);
+    const [flowError, setFlowError] = useState('');
+    const historicalFlow = leftRadar === 'FLOW' && flowDate !== '';
+    const leftRefreshTick = historicalFlow ? 0 : xbandRefreshTick;
     const [leftXbandIndex, setLeftXbandIndex] = useState(0);
     const [middleXbandIndex, setMiddleXbandIndex] = useState(0);
     const [rightXbandIndex, setRightXbandIndex] = useState(0);
@@ -227,7 +232,7 @@ export default function Public() {
         if (!isIndividualRadarView) return;
         if (intervalId) clearInterval(intervalId);
         setIsPlaying(false);
-    }, [isIndividualRadarView, leftRadar, leftRadarProduct, rightRadar, rightRadarProduct, middleRadar, middleRadarProduct]);
+    }, [isIndividualRadarView, leftRadar, leftRadarProduct, rightRadar, rightRadarProduct, middleRadar, middleRadarProduct, flowDate]);
 
     // Refresh xband images every 60s
     useEffect(() => {
@@ -253,25 +258,57 @@ export default function Public() {
         }));
 
         const controller = new AbortController();
+        let cancelled = false;
+
+        setFlowLoading(true);
+        setFlowError('');
+        setLeftImages([]);
+        setLeftMeta([]);
+        setLeftProdDetails((previous) => ({
+            ...previous, day: '', date: '', time: '',
+        }));
+
         let url = `/api/xbandRadarImages?radarFolder=${encodeURIComponent(radarFolder)}&productPrefix=${encodeURIComponent(productPrefix)}`;
-        if (XBAND_TEST_WINDOW) {
+
+        if (historicalFlow) {
+            const day = flowDate.replace(/-/g, '');
+            url += `&testStart=${day}-000000&testEnd=${day}-235959`;
+        } else if (XBAND_TEST_WINDOW) {
             url += `&testStart=${encodeURIComponent(XBAND_TEST_WINDOW.start)}&testEnd=${encodeURIComponent(XBAND_TEST_WINDOW.end)}`;
         }
-        fetch(url, { signal: controller.signal })
-            .then((r) => r.json())
+
+        fetch(url, { signal: controller.signal, cache: 'no-store' })
+            .then(async (response) => {
+                if (!response.ok) {
+                    throw new Error(`Image request failed: ${response.status}`);
+                }
+                return response.json();
+            })
             .then((data) => {
+                if (cancelled) return;
                 setLeftImages(Array.isArray(data.images) ? data.images : []);
                 setLeftMeta(Array.isArray(data.meta) ? data.meta : []);
             })
-            .catch((e) => {
-                if (e?.name === 'AbortError') return;
-                console.error('Failed to load left radar images', e);
-                setLeftImages([]);
-                setLeftMeta([]);
+            .catch((error) => {
+                if (cancelled || error?.name === 'AbortError') return;
+                console.error('Failed to load FLOW images', error);
+                setFlowError('Unable to load radar images.');
+            })
+            .finally(() => {
+                if (!cancelled) setFlowLoading(false);
             });
 
-        return () => controller.abort();
-    }, [isIndividualRadarView, leftRadar, leftRadarProduct, xbandRefreshTick]);
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
+    }, [
+        isIndividualRadarView,
+        leftRadar,
+        leftRadarProduct,
+        flowDate,
+        leftRefreshTick,
+    ]);
 
     // Fetch middle radar image sequence
     useEffect(() => {
@@ -349,8 +386,10 @@ export default function Public() {
     // Show latest frame after images load
     useEffect(() => {
         if (!isIndividualRadarView) return;
-        setLeftXbandIndex(leftImages.length > 0 ? leftImages.length - 1 : 0);
-    }, [isIndividualRadarView, leftImages, leftRadar, leftRadarProduct, xbandRefreshTick]);
+        setLeftXbandIndex(
+            historicalFlow ? 0 : Math.max(leftImages.length - 1, 0)
+        );
+    }, [isIndividualRadarView, leftImages, historicalFlow]);
 
     useEffect(() => {
         if (!isIndividualRadarView) return;
@@ -503,6 +542,12 @@ export default function Public() {
     }
 
     const handleStepBackward = () => {
+        // FLOW history disables the other panels
+        if (isIndividualRadarView && historicalFlow) {
+            setLeftXbandIndex(0);
+            return;
+        }
+
         if (isIndividualRadarView) {
             setLeftXbandIndex(0);
             setMiddleXbandIndex(0);
@@ -519,6 +564,13 @@ export default function Public() {
     }
 
     const handleStepForward = () => {
+        // FLOW history disables the other panels
+        if (isIndividualRadarView && historicalFlow) {
+            
+            setLeftXbandIndex(Math.max(leftImages.length - 1, 0));
+            return;
+        }
+
         if (isIndividualRadarView) {
             if (leftImages.length > 0) setLeftXbandIndex(leftImages.length - 1);
             if (middleImages.length > 0) setMiddleXbandIndex(middleImages.length - 1);
@@ -535,6 +587,26 @@ export default function Public() {
     }
 
     const handlePlayPause = () => {
+        // FLOW history disables the other panels
+        if (isIndividualRadarView && historicalFlow) {
+            
+            if (isPlaying) {
+                if (intervalId) clearInterval(intervalId);
+                setIsPlaying(false);
+            } else {
+                if (leftImagesRef.current.length === 0) return;
+                const id = setInterval(() => {
+                    setLeftXbandIndex((previous) => {
+                        const count = leftImagesRef.current.length;
+                        return count > 0 ? (previous + 1) % count : 0;
+                    });
+                }, 700);
+                setIntervalId(id);
+                setIsPlaying(true);
+            }
+            return;
+        }
+
         if (isPlaying) {
             if (intervalId) clearInterval(intervalId);
             setIsPlaying(false);
@@ -572,6 +644,13 @@ export default function Public() {
     };
 
     const handleBackward = () => {
+        // FLOW history disables the other panels
+        if (isIndividualRadarView && historicalFlow) {
+            
+            setLeftXbandIndex((previous) => Math.max(previous - 1, 0));
+            return;
+        }
+
         if (isIndividualRadarView) {
             setLeftXbandIndex((prev) => (prev > 0 ? prev - 1 : 0));
             setMiddleXbandIndex((prev) => (prev > 0 ? prev - 1 : 0));
@@ -588,6 +667,15 @@ export default function Public() {
     }
 
     const handleForward = () => {
+        // FLOW history disables the other panels
+        if (isIndividualRadarView && historicalFlow) {
+            
+            setLeftXbandIndex((previous) =>
+                Math.min(previous + 1, Math.max(leftImages.length - 1, 0))
+            );
+            return;
+        }
+
         if (isIndividualRadarView) {
             setLeftXbandIndex((prev) => {
                 const L = leftImages.length;
@@ -645,6 +733,24 @@ export default function Public() {
         };
     }, [intervalId]);
 
+
+    // Start the selected FLOW day automatically.
+    useEffect(() => {
+        if (!isIndividualRadarView || !historicalFlow) return;
+        setIsPlaying(false);
+        if (leftImages.length === 0) return;
+
+        const id = setInterval(() => {
+            setLeftXbandIndex((previous) =>
+                (previous + 1) % leftImages.length
+            );
+        }, 700);
+
+        setIntervalId(id);
+        setIsPlaying(true);
+        return () => clearInterval(id);
+    }, [isIndividualRadarView, historicalFlow, leftImages]);
+
     return (
         <div className="w-screen flex-none w-screen flex-none flex flex-col md:flex-row md:overflow-hidden lg:overflow-hidden">
             <div className="w-full md:w-64 2xl:w-[20rem] flex-none">
@@ -665,7 +771,7 @@ export default function Public() {
                     {isIndividualRadarView ? (
                         <div className="flex w-full h-full">
                             {/* Left radar panel */}
-                            <div className="relative w-1/3 min-w-0 h-full">
+                            <div className={`relative min-w-0 h-full ${historicalFlow ? "w-full" : "w-1/3"}`}>
                                 <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
                                     <div className="grid grid-cols-1 gap-2">
                                         <div>
@@ -694,6 +800,42 @@ export default function Public() {
                                                 {/*<option value="RhoHV">RhoHV</option>*/}
                                             </select>
                                         </div>
+
+                                        {leftRadar === 'FLOW' && (
+                                            <div>
+                                                <label
+                                                    htmlFor="flow-date"
+                                                    className="block font-semibold text-gray-800 mb-1"
+                                                >
+                                                    Historical date (UTC)
+                                                </label>
+                                                <input
+                                                    id="flow-date"
+                                                    type="date"
+                                                    value={flowDate}
+                                                    onChange={(event) => setFlowDate(event.target.value)}
+                                                    className="w-full border border-gray-300 rounded-md px-2 py-1 bg-white"
+                                                />
+                                                {flowDate && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFlowDate('')}
+                                                        className="mt-2 underline"
+                                                    >
+                                                        Return to live
+                                                    </button>
+                                                )}
+                                                <p role="status" className="mt-1">
+                                                    {flowLoading
+                                                        ? 'Loading…'
+                                                        : flowError
+                                                            ? flowError
+                                                            : leftImages.length === 0
+                                                                ? 'No data available'
+                                                                : `${leftImages.length} frames`}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <Map
@@ -710,7 +852,25 @@ export default function Public() {
                                 />
                             </div>
                             {/* Middle radar panel */}
-                            <div className="relative w-1/3 min-w-0 h-full">
+                            <div className={`relative w-1/3 min-w-0 h-full ${historicalFlow ? "hidden" : ""}`}>
+                                {historicalFlow ? (
+                                    <div
+                                        role="status"
+                                        className="flex h-full items-center justify-center bg-gray-100 px-6 text-center text-gray-600"
+                                    >
+                                        <div>
+                                            <p className="font-semibold">Panel disabled</p>
+                                            <p className="mt-2">
+                                                Disabled while viewing FLOW history.
+                                            </p>
+                                            <p className="mt-2">
+                                                Select Return to live to enable it.
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+
                                 <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
                                     <div className="grid grid-cols-1 gap-2">
                                         <div>
@@ -753,9 +913,30 @@ export default function Public() {
                                     unit={middleUnit}
                                     productInfo={middleProductInfo}
                                 />
+
+                                    </>
+                                )}
                             </div>
                             {/* Right radar panel */}
-                            <div className="relative w-1/3 min-w-0 h-full">
+                            <div className={`relative w-1/3 min-w-0 h-full ${historicalFlow ? "hidden" : ""}`}>
+                                {historicalFlow ? (
+                                    <div
+                                        role="status"
+                                        className="flex h-full items-center justify-center bg-gray-100 px-6 text-center text-gray-600"
+                                    >
+                                        <div>
+                                            <p className="font-semibold">Panel disabled</p>
+                                            <p className="mt-2">
+                                                Disabled while viewing FLOW history.
+                                            </p>
+                                            <p className="mt-2">
+                                                Select Return to live to enable it.
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+
                                 <div className="absolute z-20 top-2 left-20 bg-theme_green/10 rounded-lg px-4 py-3 shadow-md border border-theme_green/30 space-y-2 text-xs">
                                     <div className="grid grid-cols-1 gap-2">
                                         <div>
@@ -798,6 +979,9 @@ export default function Public() {
                                     unit={rightUnit}
                                     productInfo={rightProductInfo}
                                 />
+
+                                    </>
+                                )}
                             </div>
                         </div>
                     ) : (
