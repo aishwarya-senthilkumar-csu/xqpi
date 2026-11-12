@@ -25,12 +25,29 @@ type XBandProdDetails = {
     time: string;
 };
 
+type ProductStep = {
+    imageName: string;
+    day: string;
+    date: string;
+    time: string;
+};
+
+type ProductDetails = {
+    product: string;
+    steps: ProductStep[];
+};
+
+const historyProducts = [
+    products.radarData.qpe_15min,
+    products.radarData.qpe_1hr,
+    products.radarData.pr,
+    products.radarData.com_ref,
+];
+
 export default function Public() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
-    const [images, setImages] = useState<string[]>([])
-    const [selectedProduct, setSelectedProduct] = useState(null);
     const [isIndividualRadarView, setIsIndividualRadarView] = useState(true);
 
     // Placeholder radar names — update folder keys to match actual XQPI radar folder names
@@ -126,106 +143,101 @@ export default function Public() {
     rightImagesRef.current = rightImages;
 
     const [unit, setUnit] = useState(units.in)
-    const currUnit = useRef(unit);
     const [productPath, setproductPath] = useState(productImageDir.atmosphericForecast.total_precip);
     const [opacity, setOpacity] = useState(1);
     const [colorbar, setColorbar] = useState(productImageDir.atmosphericForecast.total_precip.colorbar.in);
-    const [prod_details, SetProdDetails] = useState({
-        id: 'individual_radar',
-        name: 'Precipitation',
-        day: '',
-        date: '',
-        time: ''
-    });
     const [productInfo, setProductInfo] = useState(productImageDir.atmosphericForecast.total_precip.info);
-    const rainfall_units = [products.radarData.qpe_15min, products.radarData.qpe_1hr, products.radarData.pr,
-    products.forecast.pr, products.forecast.tp]
-    const forecast_products = [products.radarData.com_nowcast, products.forecast.pr, products.forecast.tp, products.forecast.temp]
+    const [productDate, setProductDate] = useState('');
+    const [productResult, setProductResult] = useState<{
+        path: string;
+        details: ProductDetails | null;
+        images: string[];
+        error: string;
+    } | null>(null);
+    const supportsHistory = historyProducts.includes(productPath.id);
+    const historicalProduct = supportsHistory && productDate !== '';
+    const usesRainfallUnits = [
+        products.radarData.qpe_15min, products.radarData.qpe_1hr, products.radarData.pr,
+        products.forecast.pr, products.forecast.tp,
+    ].includes(productPath.id);
+    const isTemperature = productPath.id === products.forecast.temp;
+    const unitFolder = usesRainfallUnits ? unit.split('/')[0] : '';
+    const temperatureKey = unit === units.F ? 'F' : 'DEG';
+    const liveDetailsPath = typeof productPath.details === 'string'
+        ? productPath.details
+        : productPath.details[isTemperature ? temperatureKey : unitFolder];
+    const liveImagesPath = productPath.images + (
+        isTemperature ? (temperatureKey === 'F' ? 'F/' : 'Deg/') : unitFolder ? unitFolder + '/' : ''
+    );
+    const imagesPath = historicalProduct ? liveImagesPath + productDate.replace(/-/g, '/') + '/' : liveImagesPath;
+    const detailsPath = historicalProduct ? imagesPath + 'details.json' : liveDetailsPath;
+    const startAtFirstFrame = historicalProduct || [
+        products.radarData.com_nowcast, products.forecast.pr, products.forecast.tp, products.forecast.temp,
+    ].includes(productPath.id);
+
+    const activeProduct = productResult?.path === detailsPath ? productResult : null;
+    const images = activeProduct?.images ?? [];
+    const productFrame = activeProduct?.details?.steps[currentIndex];
+    const prod_details = {
+        id: isIndividualRadarView ? 'individual_radar' : productPath.id,
+        name: isIndividualRadarView ? 'Individual Radars' : activeProduct?.details?.product ?? '',
+        day: productFrame?.day ?? '',
+        date: productFrame?.date ?? '',
+        time: productFrame?.time ?? '',
+    };
 
     useEffect(() => {
-        let details_json_path = '';
-        if (rainfall_units.includes(productPath.id)) {
-            const temp_unt = (unit == 'in/hr' || unit == 'mm/hr') ? unit.split('/')[0] : unit;
-            details_json_path = productPath.details[temp_unt];
-        } else if (productPath.id == productImageDir.atmosphericForecast.temp.id) {
-            const temp_unt = (unit == productImageDir.atmosphericForecast.temp.unit.F) ? productImageDir.atmosphericForecast.temp.unit.F : 'DEG';
-            details_json_path = productPath.details[temp_unt];
-        } else {
-            details_json_path = productPath.details;
-        }
-        fetchDetailsJSON(details_json_path);
-    }, [productPath]);
+        if (isIndividualRadarView || !detailsPath) return;
 
-    useEffect(() => {
-        if (selectedProduct != null) {
-            SetProdDetails({
-                ...prod_details,
-                ['date']: selectedProduct['steps'][currentIndex]['date'],
-                ['day']: selectedProduct['steps'][currentIndex]['day'],
-                ['time']: selectedProduct['steps'][currentIndex]['time'],
-            });
-        }
-    }, [currentIndex]);
+        const controller = new AbortController();
+        setProductResult(null);
+        setCurrentIndex(0);
 
-    useEffect(() => {
-        if (selectedProduct != null) {
-            var productImages = []
-            if (rainfall_units.includes(productPath.id)) {
-                const temp_unt = (unit == 'in/hr' || unit == 'mm/hr') ? unit.split('/')[0] : unit;
-                productImages = selectedProduct.steps.map(step => productPath.images + temp_unt + '/' + step.imageName);
-            } else if (productPath.id == productImageDir.atmosphericForecast.temp.id) {
-                const temp_unt = (unit == productImageDir.atmosphericForecast.temp.unit.F) ? productImageDir.atmosphericForecast.temp.unit.F : 'Deg';
-                productImages = selectedProduct.steps.map(step => productPath.images + temp_unt + '/' + step.imageName);
-            } else {
-                productImages = selectedProduct.steps.map(step => productPath.images + step.imageName);
-            }
-            setImages(productImages);
-            if (isPlaying) {
-                if (intervalId) clearInterval(intervalId);
-                setIsPlaying(false);
-            }
-            if (forecast_products.includes(productPath.id)) {
-                setCurrentIndex(0);
-                SetProdDetails({
-                    id: productPath.id,
-                    name: selectedProduct.product,
-                    day: selectedProduct.steps[0].day,
-                    date: selectedProduct.steps[0].date,
-                    time: selectedProduct.steps[0].time,
-                });
-            } else {
-                setCurrentIndex(productImages.length - 1);
-                SetProdDetails({
-                    id: productPath.id,
-                    name: selectedProduct.product,
-                    day: selectedProduct.steps[productImages.length - 1].day,
-                    date: selectedProduct.steps[productImages.length - 1].date,
-                    time: selectedProduct.steps[productImages.length - 1].time,
-                });
-            }
-        }
-    }, [selectedProduct])
-
-    const fetchDetailsJSON = (path: string) => {
-        fetch(path)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
+        async function loadProduct() {
+            try {
+                const response = await fetch(detailsPath, { signal: controller.signal, cache: 'no-store' });
+                if (!response.ok && !(historicalProduct && response.status === 404)) {
+                    throw new Error(`Image metadata request returned ${response.status}`);
                 }
-                return response.json();
-            })
-            .then(data => {
-                setSelectedProduct(data);
-                SetProdDetails({
-                    ...prod_details,
-                    ['id']: productPath.id,
-                    ['date']: data['steps'][data['steps'].length - 1]['date'],
-                    ['day']: data['steps'][data['steps'].length - 1]['day'],
-                    ['time']: data['steps'][data['steps'].length - 1]['time'],
-                })
-            })
-            .catch(error => console.error('Error fetching data:', error));
-    }
+                const details: ProductDetails | null = response.ok ? await response.json() : null;
+                if (details && !Array.isArray(details.steps)) {
+                    throw new Error('Image metadata has no steps array');
+                }
+                if (historicalProduct && details) {
+                    // Archive filenames end in YYYYMMDD_HHMMSS.png.
+                    details.steps = [...details.steps].sort((a, b) =>
+                        a.imageName.slice(-19).localeCompare(b.imageName.slice(-19))
+                    );
+                }
+                const frames = details?.steps.map((step) => imagesPath + step.imageName) ?? [];
+                if (controller.signal.aborted) return;
+                setCurrentIndex(startAtFirstFrame ? 0 : Math.max(frames.length - 1, 0));
+                setProductResult({ path: detailsPath, details, images: frames, error: '' });
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                console.error('Error fetching product images:', error);
+                setProductResult({ path: detailsPath, details: null, images: [], error: 'Could not load images.' });
+            }
+        }
+
+        void loadProduct();
+        return () => controller.abort();
+    }, [detailsPath, imagesPath, isIndividualRadarView, historicalProduct, startAtFirstFrame]);
+
+    useEffect(() => {
+        if (isIndividualRadarView) return;
+        if (intervalId) clearInterval(intervalId);
+        setIsPlaying(false);
+        if (!historicalProduct || !activeProduct || activeProduct.images.length < 2) return;
+
+        const frameCount = activeProduct.images.length;
+        const id = setInterval(() => {
+            setCurrentIndex((previous) => (previous + 1) % frameCount);
+        }, 700);
+        setIntervalId(id);
+        setIsPlaying(true);
+        return () => clearInterval(id);
+    }, [isIndividualRadarView, historicalProduct, detailsPath, activeProduct]);
 
     // Stop animation when switching to/from individual radar view or changing radar selection
     useEffect(() => {
@@ -479,13 +491,6 @@ export default function Public() {
     const handleProductChange = (product: string) => {
         if (product === 'individual_radar') {
             setIsIndividualRadarView(true);
-            SetProdDetails({
-                id: 'individual_radar',
-                name: 'Individual Radars',
-                day: '',
-                date: '',
-                time: '',
-            });
             return;
         }
         setIsIndividualRadarView(false);
@@ -494,49 +499,41 @@ export default function Public() {
             setproductPath(productImageDir.radarData.precip_rate);
             setColorbar(productImageDir.radarData.precip_rate.colorbar.in);
             setUnit(productImageDir.radarData.precip_rate.unit.in);
-            currUnit.current = productImageDir.radarData.precip_rate.unit.in;
             setProductInfo(productImageDir.radarData.precip_rate.info);
         } else if (product == 'qpe_15min') {
             setproductPath(productImageDir.radarData.qpe_15min);
             setColorbar(productImageDir.radarData.qpe_15min.colorbar.in);
             setUnit(productImageDir.radarData.qpe_15min.unit.in);
-            currUnit.current = productImageDir.radarData.qpe_15min.unit.in;
             setProductInfo(productImageDir.radarData.qpe_15min.info);
         } else if (product == 'qpe_1hr') {
             setproductPath(productImageDir.radarData.qpe_1hr);
             setColorbar(productImageDir.radarData.qpe_1hr.colorbar.in);
             setUnit(productImageDir.radarData.qpe_1hr.unit.in);
-            currUnit.current = productImageDir.radarData.qpe_1hr.unit.in;
             setProductInfo(productImageDir.radarData.qpe_1hr.info);
         } else if (product == 'pr') {
             setproductPath(productImageDir.atmosphericForecast.precip_rate);
             setColorbar(productImageDir.atmosphericForecast.precip_rate.colorbar.in);
             setUnit(productImageDir.atmosphericForecast.precip_rate.unit.in);
-            currUnit.current = productImageDir.atmosphericForecast.precip_rate.unit.in;
             setProductInfo(productImageDir.atmosphericForecast.precip_rate.info);
         } else if (product == 'tp') {
             setproductPath(productImageDir.atmosphericForecast.total_precip);
             setColorbar(productImageDir.atmosphericForecast.total_precip.colorbar.in);
             setUnit(productImageDir.atmosphericForecast.total_precip.unit.in);
-            currUnit.current = productImageDir.atmosphericForecast.total_precip.unit.in;
             setProductInfo(productImageDir.atmosphericForecast.total_precip.info);
         } else if (product == 'comp_ref') {
             setproductPath(productImageDir.radarData.comp_ref);
             setColorbar(productImageDir.radarData.comp_ref.colorbar.dbz);
             setUnit(productImageDir.radarData.comp_ref.unit.dbz)
-            currUnit.current = productImageDir.radarData.comp_ref.unit.dbz;
             setProductInfo(productImageDir.radarData.comp_ref.info);
         } else if (product == 'comp_now') {
             setproductPath(productImageDir.radarData.comp_now);
             setColorbar(productImageDir.radarData.comp_now.colorbar.dbz);
             setUnit(productImageDir.radarData.comp_now.unit.dbz)
-            currUnit.current = productImageDir.radarData.comp_now.unit.dbz;
             setProductInfo(productImageDir.radarData.comp_now.info);
         } else if (product == 'temp') {
             setproductPath(productImageDir.atmosphericForecast.temp);
             setColorbar(productImageDir.atmosphericForecast.temp.colorbar.F);
             setUnit(productImageDir.atmosphericForecast.temp.unit.F)
-            currUnit.current = productImageDir.atmosphericForecast.temp.unit.F;
             setProductInfo(productImageDir.atmosphericForecast.temp.info);
         }
     }
@@ -555,12 +552,6 @@ export default function Public() {
             return;
         }
         setCurrentIndex(0);
-        SetProdDetails({
-            ...prod_details,
-            ['date']: selectedProduct['steps'][0]['date'],
-            ['day']: selectedProduct['steps'][0]['day'],
-            ['time']: selectedProduct['steps'][0]['time'],
-        });
     }
 
     const handleStepForward = () => {
@@ -577,13 +568,7 @@ export default function Public() {
             if (rightImages.length > 0) setRightXbandIndex(rightImages.length - 1);
             return;
         }
-        setCurrentIndex(images.length - 1);
-        SetProdDetails({
-            ...prod_details,
-            ['date']: selectedProduct['steps'][images.length - 1]['date'],
-            ['day']: selectedProduct['steps'][images.length - 1]['day'],
-            ['time']: selectedProduct['steps'][images.length - 1]['time'],
-        })
+        setCurrentIndex(Math.max(images.length - 1, 0));
     }
 
     const handlePlayPause = () => {
@@ -658,12 +643,6 @@ export default function Public() {
             return;
         }
         setCurrentIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0));
-        SetProdDetails({
-            ...prod_details,
-            ['date']: selectedProduct['steps'][currentIndex]['date'],
-            ['day']: selectedProduct['steps'][currentIndex]['day'],
-            ['time']: selectedProduct['steps'][currentIndex]['time'],
-        });
     }
 
     const handleForward = () => {
@@ -694,13 +673,7 @@ export default function Public() {
             });
             return;
         }
-        setCurrentIndex((prevIndex) => (prevIndex < images.length - 1 ? prevIndex + 1 : images.length - 1));
-        SetProdDetails({
-            ...prod_details,
-            ['date']: selectedProduct['steps'][currentIndex]['date'],
-            ['day']: selectedProduct['steps'][currentIndex]['day'],
-            ['time']: selectedProduct['steps'][currentIndex]['time'],
-        });
+        setCurrentIndex((previous) => Math.min(previous + 1, Math.max(images.length - 1, 0)));
     }
 
     const handleOpacityChange = (opacity: number) => {
@@ -708,23 +681,17 @@ export default function Public() {
     }
 
     const handleUnitChange = (selUnit: string, selProduct: string) => {
-        let json_path = '';
-        currUnit.current = selUnit
         if ([productImageDir.radarData.qpe_15min.id, productImageDir.radarData.qpe_1hr.id, productImageDir.atmosphericForecast.total_precip.id].includes(selProduct)) {
             setUnit(productPath.unit[selUnit]);
             setColorbar(productImageDir.radarData.qpe_15min.colorbar[selUnit]);
-            json_path = productPath.details[selUnit]
         } else if (selProduct == productImageDir.radarData.precip_rate.id || selProduct == productImageDir.atmosphericForecast.precip_rate.id) {
             setUnit(productPath.unit[selUnit]);
             setColorbar(productImageDir.radarData.precip_rate.colorbar[selUnit]);
-            json_path = productPath.details[selUnit]
         } else if (selProduct == productImageDir.atmosphericForecast.temp.id) {
             const temp_unt = (selUnit == productImageDir.atmosphericForecast.temp.unit.F) ? productImageDir.atmosphericForecast.temp.unit.F : 'DEG';
             setUnit(productPath.unit[temp_unt]);
             setColorbar(productImageDir.atmosphericForecast.temp.colorbar[temp_unt]);
-            json_path = productPath.details[temp_unt]
         }
-        fetchDetailsJSON(json_path);
     }
 
     useEffect(() => {
@@ -985,17 +952,44 @@ export default function Public() {
                             </div>
                         </div>
                     ) : (
-                        <Map
-                            mapId="map"
-                            onUnitChange={handleUnitChange}
-                            images={images}
-                            currentIndex={currentIndex}
-                            prod_details={prod_details}
-                            opacity={opacity}
-                            colorbar={colorbar}
-                            unit={unit}
-                            productInfo={productInfo}
-                        />
+                        <div className="relative h-full w-full">
+                            {supportsHistory && (
+                                <div className="absolute z-20 top-2 left-20 rounded-lg bg-white px-4 py-3 shadow-md border border-theme_green/30 text-xs">
+                                    <label htmlFor="product-date" className="block font-semibold text-gray-800 mb-1">
+                                        Historical date (UTC)
+                                    </label>
+                                    <input
+                                        id="product-date"
+                                        type="date"
+                                        value={productDate}
+                                        onChange={(event) => setProductDate(event.target.value)}
+                                        className="block rounded-md border border-gray-300 px-2 py-1"
+                                    />
+                                    {historicalProduct && (
+                                        <>
+                                            <button type="button" onClick={() => setProductDate('')} className="mt-2 underline">
+                                                Return to live
+                                            </button>
+                                            <p role="status" className="mt-1">
+                                                {!activeProduct ? 'Loading…' : activeProduct.error ||
+                                                    (images.length ? `${images.length} frames` : 'No archived images for this date.')}
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                            <Map
+                                mapId="map"
+                                onUnitChange={handleUnitChange}
+                                images={images}
+                                currentIndex={currentIndex}
+                                prod_details={prod_details}
+                                opacity={opacity}
+                                colorbar={colorbar}
+                                unit={unit}
+                                productInfo={productInfo}
+                            />
+                        </div>
                     )}
                 </main>
             </div>

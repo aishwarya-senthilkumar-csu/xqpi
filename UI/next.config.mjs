@@ -11,12 +11,21 @@ const nextConfig = {
         ignoreDuringBuilds: true,
     },
     async rewrites() {
-        return [
-            {
-                source: '/products/:path*',
-                destination: '/api/xbandRadarImages?file=:path*',
-            },
-        ];
+        return {
+            beforeFiles: [
+                {
+                    source: '/products/:product(qpe_15min|qpe_1hr|radar_precip_rate|composite_ref)/:asset*',
+                    destination: '/api/productArchive/:product/:asset*',
+                },
+            ],
+            afterFiles: [
+                {
+                    source: '/products/:path*',
+                    destination: '/api/xbandRadarImages?file=:path*',
+                },
+            ],
+            fallback: [],
+        };
     },
 };
 
